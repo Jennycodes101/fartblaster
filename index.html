@@ -47,6 +47,25 @@
       pointer-events: none;
       z-index: 10;
     }
+    #milestoneMessage {
+      position: absolute;
+      top: calc(18px + env(safe-area-inset-top, 0px));
+      left: 50%;
+      transform: translateX(-50%);
+      width: max-content;
+      max-width: calc(100% - 24px);
+      padding: 10px 14px;
+      border: 2px solid #ff6ec7;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.84);
+      color: #ff9acb;
+      font-size: clamp(15px, 4vw, 20px);
+      font-weight: bold;
+      text-align: center;
+      text-shadow: 2px 2px #4a1732;
+      pointer-events: none;
+      z-index: 15;
+    }
     #startScreen, #gameOver {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -121,6 +140,7 @@
 </head>
 <body>
   <div id="ui">SCORE: 0</div>
+  <div id="milestoneMessage" role="status" aria-live="polite" hidden></div>
 
   <div id="startScreen">
     <h1>💨 FART BLASTER</h1>
@@ -145,7 +165,6 @@
       <rect x="32" y="50" width="24" height="26" fill="#4a90d9"/>
       <rect x="34" y="76" width="8" height="12" fill="#2c3e50"/>
       <rect x="48" y="76" width="8" height="12" fill="#2c3e50"/>
-
       <rect x="90" y="18" width="30" height="10" fill="#ff66b3"/>
       <rect x="82" y="26" width="10" height="18" fill="#ff66b3"/>
       <rect x="92" y="26" width="26" height="22" fill="#f6d7b9"/>
@@ -162,7 +181,6 @@
       <rect x="124" y="48" width="7" height="7" fill="#ff66b3"/>
       <rect x="135" y="30" width="7" height="7" fill="#ff66b3"/>
       <rect x="141" y="36" width="7" height="7" fill="#ff66b3"/>
-
       <rect x="66" y="50" width="7" height="7" fill="#ff66b3"/>
       <rect x="70" y="56" width="7" height="7" fill="#ff66b3"/>
       <rect x="62" y="58" width="7" height="7" fill="#ff66b3"/>
@@ -179,6 +197,7 @@
     ctx.imageSmoothingEnabled = false;
 
     const uiEl = document.getElementById('ui');
+    const milestoneMessageEl = document.getElementById('milestoneMessage');
     const startScreenEl = document.getElementById('startScreen');
     const gameOverEl = document.getElementById('gameOver');
     const finalScoreEl = document.getElementById('finalScore');
@@ -195,6 +214,16 @@
     let spawnTimer = 0;
     let spawnRate = 54;
     let frame = 0;
+    let nextMilestoneIndex = 0;
+    let milestoneTimeout;
+
+    const scoreMilestones = [
+      { score: 100, message: 'hell yeah brother' },
+      { score: 200, message: "I'm the fart king" },
+      { score: 300, message: 'farting hero' },
+      { score: 400, message: 'I knew my farts would save the day' },
+      { score: 500, message: "I don't trust this fart" }
+    ];
 
     const player = {
       x: W / 2,
@@ -252,7 +281,6 @@
 
       const noise = audioCtx.createBufferSource();
       noise.buffer = noiseBuffer;
-
       const filter = audioCtx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.frequency.setValueAtTime(700 + Math.random() * 400, now);
@@ -275,7 +303,6 @@
       noise.connect(filter);
       filter.connect(noiseGain);
       noiseGain.connect(audioCtx.destination);
-
       rumble.connect(rumbleGain);
       rumbleGain.connect(audioCtx.destination);
 
@@ -311,6 +338,18 @@
         const note = melody[musicIndex];
         if (note > 0) playMusicNote(note, 0.18);
         musicIndex = (musicIndex + 1) % melody.length;
+      }
+    }
+
+    function showNextScoreMilestone() {
+      while (nextMilestoneIndex < scoreMilestones.length && score >= scoreMilestones[nextMilestoneIndex].score) {
+        const milestone = scoreMilestones[nextMilestoneIndex++];
+        milestoneMessageEl.textContent = milestone.message;
+        milestoneMessageEl.hidden = false;
+        clearTimeout(milestoneTimeout);
+        milestoneTimeout = setTimeout(() => {
+          milestoneMessageEl.hidden = true;
+        }, 2500);
       }
     }
 
@@ -475,6 +514,7 @@
             createExplosion(e.x, e.y);
             enemies.splice(j, 1);
             score += 10;
+            showNextScoreMilestone();
             playHit();
           }
         }
@@ -560,6 +600,9 @@
       player.cooldown = 0;
       musicIndex = 0;
       musicTimer = 0;
+      nextMilestoneIndex = 0;
+      clearTimeout(milestoneTimeout);
+      milestoneMessageEl.hidden = true;
       gameRunning = true;
 
       startScreenEl.style.display = 'none';
