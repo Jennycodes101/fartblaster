@@ -81,6 +81,21 @@
       image-rendering: pixelated;
       margin: 4px 0;
     }
+    .hero-tag {
+      margin-top: -6px;
+      margin-bottom: 8px;
+      color: #ff6ec7;
+      font-size: clamp(18px, 3vw, 28px);
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px #ff6ec7, 3px 3px 0 #000;
+      animation: flicker 0.25s infinite alternate;
+    }
+    @keyframes flicker {
+      0% { opacity: 0.7; transform: translateY(0); }
+      50% { opacity: 1; transform: translateY(-1px); }
+      100% { opacity: 0.9; transform: translateY(1px); }
+    }
   </style>
 </head>
 <body>
@@ -88,7 +103,7 @@
 
   <div id="startScreen">
     <h1>💨 FART BLASTER</h1>
-    <p>Marcus saves the day</p>
+    <p class="hero-tag">Marcus saves the day</p>
     <p>8-BIT EDITION</p>
     <p>Creatures are coming!<br>Tap screen or press SPACE to FART BLAST</p>
     <p style="font-size:14px;margin-top:15px">Green gas destroys enemies</p>
