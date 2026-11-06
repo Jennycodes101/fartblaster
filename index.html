@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FART BLASTER</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+      touch-action: none;
+    }
+    canvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      border: 4px solid #333;
+      max-width: 100%;
+      max-height: 100vh;
+      background: #1a1a2e;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: #0f0;
+      font-size: 18px;
+      text-shadow: 2px 2px #000;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #startScreen, #gameOver {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0,0,0,0.85);
+      color: #0f0;
+      z-index: 20;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 42px;
+      margin-bottom: 10px;
+      color: #0f0;
+      text-shadow: 0 0 10px #0f0;
+    }
+    .btn {
+      margin-top: 20px;
+      padding: 12px 30px;
+      font-size: 20px;
+      background: #0a0;
+      color: #000;
+      border: 3px solid #0f0;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: bold;
+    }
+    .btn:active { background: #0f0; }
+    p { margin: 8px 0; color: #8f8; }
+  </style>
+</head>
+<body>
+  <div id="ui">SCORE: 0</div>
+
+  <div id="startScreen">
+    <h1>💨 FART BLASTER</h1>
+    <p>8-BIT EDITION</p>
+    <p>Creatures are coming!<br>Tap screen or press SPACE to FART BLAST</p>
+    <p style="font-size:14px;margin-top:15px">Green gas destroys enemies</p>
+    <button class="btn" id="startBtn">START GAME</button>
+  </div>
+
+  <div id="gameOver" style="display:none">
+    <h1>GAME OVER</h1>
+    <p id="finalScore">Score: 0</p>
+    <button class="btn" id="restartBtn">PLAY AGAIN</button>
+  </div>
+
+  <canvas id="game" width="360" height="640"></canvas>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    const uiEl = document.getElementById('ui');
+    const startScreenEl = document.getElementById('startScreen');
+    const gameOverEl = document.getElementById('gameOver');
+    const finalScoreEl = document.getElementById('finalScore');
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = 360;
+    const H = 640;
+
+    let score = 0;
+    let lives = 3;
+    let gameRunning = false;
+    let enemies = [];
+    let farts = [];
+    let particles = [];
+    let spawnTimer = 0;
+    let spawnRate = 90;
+    let frame = 0;
+
+    const player = {
+      x: W / 2,
+      y: H - 80,
+      w: 24,
+      h: 32,
+      cooldown: 0
+    };
+
+    let audioCtx;
+    function initAudio() {
+      if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioCtx;
+    }
+
+    function ensureAudio() {
+      const ctxAudio = initAudio();
+      if (!ctxAudio) return;
+      if (ctxAudio.state === 'suspended') {
+        ctxAudio.resume().catch(() => {});
+      }
+    }
+
+    function playNote(freq, type, vol, dur) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      osc.start(now);
+      osc.stop(now + dur);
+    }
+
+    function playFart() {
+      if (!audioCtx) return;
+      playNote(80, 'sawtooth', 0.25, 0.25);
+      playNote(60, 'square', 0.15, 0.3);
+
+      const bufferSize = audioCtx.sampleRate * 0.2;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+      }
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+      const gain = audioCtx.createGain();
+      noise.connect(gain);
+      gain.connect(audioCtx.destination);
+      gain.gain.value = 0.3;
+      noise.start();
+    }
+
+    function playHit() {
+      playNote(220, 'square', 0.15, 0.08);
+      playNote(110, 'square', 0.1, 0.12);
+    }
+
+    function playMusicNote(freq, dur) {
+      playNote(freq, 'square', 0.06, dur);
+    }
+
+    const melody = [
+      262, 294, 330, 262, 330, 349, 392, 0,
+      392, 349, 330, 294, 262, 294, 330, 0,
+      330, 349, 392, 440, 392, 349, 330, 0,
+      294, 330, 262, 220, 262, 0, 0, 0
+    ];
+    let musicIndex = 0;
+    let musicTimer = 0;
+
+    function updateMusic() {
+      if (!gameRunning) return;
+      musicTimer++;
+      if (musicTimer >= 12) {
+        musicTimer = 0;
+        const note = melody[musicIndex];
+        if (note > 0) playMusicNote(note, 0.18);
+        musicIndex = (musicIndex + 1) % melody.length;
+      }
+    }
+
+    function drawPixelRect(x, y, w, h, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(Math.floor(x), Math.floor(y), w, h);
+    }
+
+    function drawPlayer() {
+      const px = Math.floor(player.x - player.w / 2);
+      const py = Math.floor(player.y - player.h / 2);
+
+      drawPixelRect(px + 6, py + 10, 12, 14, '#4a90d9');
+      drawPixelRect(px + 6, py, 12, 10, '#f5c6a5');
+      drawPixelRect(px + 8, py + 3, 2, 2, '#000');
+      drawPixelRect(px + 14, py + 3, 2, 2, '#000');
+      drawPixelRect(px + 6, py + 22, 5, 8, '#2c3e50');
+      drawPixelRect(px + 13, py + 22, 5, 8, '#2c3e50');
+      drawPixelRect(px + 1, py + 12, 5, 4, '#f5c6a5');
+      drawPixelRect(px + 18, py + 12, 5, 4, '#f5c6a5');
+      drawPixelRect(px + 5, py - 2, 14, 4, '#e74c3c');
+      drawPixelRect(px + 4, py + 1, 3, 3, '#e74c3c');
+    }
+
+    function drawEnemy(e) {
+      const x = Math.floor(e.x - 12);
+      const y = Math.floor(e.y - 12);
+      drawPixelRect(x + 2, y + 4, 20, 16, e.color);
+      drawPixelRect(x + 5, y + 7, 4, 4, '#fff');
+      drawPixelRect(x + 13, y + 7, 4, 4, '#fff');
+      drawPixelRect(x + 6, y + 8, 2, 2, '#f00');
+      drawPixelRect(x + 14, y + 8, 2, 2, '#f00');
+      drawPixelRect(x + 7, y + 14, 8, 2, '#000');
+      drawPixelRect(x, y + 8, 3, 6, e.color);
+      drawPixelRect(x + 21, y + 8, 3, 6, e.color);
+      drawPixelRect(x + 6, y + 18, 3, 5, e.color);
+      drawPixelRect(x + 15, y + 18, 3, 5, e.color);
+    }
+
+    function drawFart(f) {
+      ctx.globalAlpha = f.life / 30;
+      for (let i = 0; i < 6; i++) {
+        const ox = Math.sin(frame * 0.2 + i) * 6;
+        const oy = Math.cos(frame * 0.15 + i) * 4;
+        drawPixelRect(f.x - 10 + ox + i * 3, f.y - 8 + oy, 10, 10, '#2ecc71');
+        drawPixelRect(f.x - 6 + ox + i * 2, f.y - 4 + oy, 8, 8, '#27ae60');
+      }
+      drawPixelRect(f.x - 4, f.y - 4, 8, 8, '#1abc9c');
+      ctx.globalAlpha = 1;
+    }
+
+    function drawParticle(p) {
+      ctx.globalAlpha = p.life / 20;
+      drawPixelRect(p.x, p.y, p.size, p.size, p.color);
+      ctx.globalAlpha = 1;
+    }
+
+    function spawnEnemy() {
+      const side = Math.random() < 0.5 ? 'top' : (Math.random() < 0.5 ? 'left' : 'right');
+      let x, y, vx, vy;
+      const speed = 1.2 + Math.random() * 1.5 + score * 0.01;
+
+      if (side === 'top') {
+        x = 30 + Math.random() * (W - 60);
+        y = -20;
+        vx = (player.x - x) * 0.01;
+        vy = speed;
+      } else if (side === 'left') {
+        x = -20;
+        y = 50 + Math.random() * (H * 0.6);
+        vx = speed;
+        vy = (player.y - y) * 0.008;
+      } else {
+        x = W + 20;
+        y = 50 + Math.random() * (H * 0.6);
+        vx = -speed;
+        vy = (player.y - y) * 0.008;
+      }
+
+      const colors = ['#e74c3c', '#9b59b6', '#e67e22', '#c0392b', '#8e44ad'];
+      enemies.push({
+        x, y, vx, vy,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        hp: 1
+      });
+    }
+
+    function fireFart() {
+      if (!gameRunning || player.cooldown > 0) return;
+      player.cooldown = 18;
+      playFart();
+
+      farts.push({ x: player.x, y: player.y - 20, vx: 0, vy: -6, life: 35, radius: 28 });
+      farts.push({ x: player.x - 8, y: player.y - 15, vx: -2.5, vy: -4.5, life: 28, radius: 20 });
+      farts.push({ x: player.x + 8, y: player.y - 15, vx: 2.5, vy: -4.5, life: 28, radius: 20 });
+    }
+
+    function createExplosion(x, y) {
+      for (let i = 0; i < 12; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 6,
+          life: 15 + Math.random() * 10,
+          size: 2 + Math.random() * 3,
+          color: Math.random() > 0.5 ? '#2ecc71' : '#27ae60'
+        });
+      }
+    }
+
+    function update() {
+      if (!gameRunning) return;
+      frame++;
+
+      if (player.cooldown > 0) player.cooldown--;
+
+      spawnTimer++;
+      if (spawnTimer >= spawnRate) {
+        spawnTimer = 0;
+        spawnEnemy();
+        if (spawnRate > 35) spawnRate -= 0.3;
+      }
+
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        e.x += e.vx;
+        e.y += e.vy;
+
+        const dx = e.x - player.x;
+        const dy = e.y - player.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 22) {
+          enemies.splice(i, 1);
+          lives--;
+          playHit();
+          createExplosion(player.x, player.y);
+          if (lives <= 0) {
+            endGame();
+          }
+          continue;
+        }
+
+        if (e.y > H + 40 || e.x < -40 || e.x > W + 40) {
+          enemies.splice(i, 1);
+        }
+      }
+
+      for (let i = farts.length - 1; i >= 0; i--) {
+        const f = farts[i];
+        f.x += f.vx;
+        f.y += f.vy;
+        f.life--;
+        f.radius += 0.3;
+
+        for (let j = enemies.length - 1; j >= 0; j--) {
+          const e = enemies[j];
+          const dx = e.x - f.x;
+          const dy = e.y - f.y;
+          if (Math.sqrt(dx * dx + dy * dy) < f.radius) {
+            createExplosion(e.x, e.y);
+            enemies.splice(j, 1);
+            score += 10;
+            playHit();
+          }
+        }
+
+        if (f.life <= 0) farts.splice(i, 1);
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+
+      updateMusic();
+      uiEl.textContent = `SCORE: ${score}   LIVES: ${'❤'.repeat(lives)}`;
+    }
+
+    function draw() {
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.fillStyle = '#fff';
+      for (let i = 0; i < 40; i++) {
+        const sx = (i * 97) % W;
+        const sy = (i * 53 + frame * 0.3) % H;
+        ctx.fillRect(sx, sy, 2, 2);
+      }
+
+      drawPixelRect(0, H - 40, W, 40, '#16213e');
+      for (let i = 0; i < W; i += 16) {
+        drawPixelRect(i, H - 40, 8, 4, '#0f3460');
+      }
+
+      farts.forEach(drawFart);
+      enemies.forEach(drawEnemy);
+      particles.forEach(drawParticle);
+      drawPlayer();
+
+      if (player.cooldown > 0) {
+        ctx.fillStyle = '#333';
+        ctx.fillRect(player.x - 15, player.y + 22, 30, 4);
+        ctx.fillStyle = '#2ecc71';
+        ctx.fillRect(player.x - 15, player.y + 22, 30 * (1 - player.cooldown / 18), 4);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    function handleInput(e) {
+      if (e) e.preventDefault();
+      if (!gameRunning) return;
+      ensureAudio();
+      fireFart();
+    }
+
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space') {
+        handleInput(e);
+      }
+    });
+
+    canvas.addEventListener('pointerdown', handleInput);
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('restartBtn').addEventListener('click', startGame);
+    document.body.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+    function startGame() {
+      ensureAudio();
+
+      score = 0;
+      lives = 3;
+      enemies = [];
+      farts = [];
+      particles = [];
+      spawnTimer = 0;
+      spawnRate = 90;
+      player.cooldown = 0;
+      musicIndex = 0;
+      gameRunning = true;
+
+      startScreenEl.style.display = 'none';
+      gameOverEl.style.display = 'none';
+      uiEl.style.display = 'block';
+      uiEl.textContent = `SCORE: ${score}   LIVES: ${'❤'.repeat(lives)}`;
+    }
+
+    function endGame() {
+      gameRunning = false;
+      finalScoreEl.textContent = `Final Score: ${score}`;
+      gameOverEl.style.display = 'flex';
+    }
+
+    uiEl.style.display = 'block';
+    startScreenEl.style.display = 'flex';
+    gameOverEl.style.display = 'none';
+    loop();
+  </script>
+</body>
+</html>
+
+
