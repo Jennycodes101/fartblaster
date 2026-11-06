@@ -237,22 +237,52 @@
 
     function playFart() {
       if (!audioCtx) return;
-      playNote(80, 'sawtooth', 0.25, 0.25);
-      playNote(60, 'square', 0.15, 0.3);
 
-      const bufferSize = audioCtx.sampleRate * 0.2;
-      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+      const now = audioCtx.currentTime;
+      const duration = 0.45 + Math.random() * 0.25;
+      const noiseSize = Math.floor(audioCtx.sampleRate * duration);
+      const noiseBuffer = audioCtx.createBuffer(1, noiseSize, audioCtx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+
+      for (let i = 0; i < noiseSize; i++) {
+        const wobble = 1 + Math.sin(i / 220) * 0.9;
+        const envelope = Math.exp(-i / (noiseSize * 0.25));
+        data[i] = (Math.random() * 2 - 1) * wobble * envelope;
       }
+
       const noise = audioCtx.createBufferSource();
-      noise.buffer = buffer;
-      const gain = audioCtx.createGain();
-      noise.connect(gain);
-      gain.connect(audioCtx.destination);
-      gain.gain.value = 0.3;
-      noise.start();
+      noise.buffer = noiseBuffer;
+
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(700 + Math.random() * 400, now);
+      filter.Q.value = 0.5;
+
+      const noiseGain = audioCtx.createGain();
+      noiseGain.gain.setValueAtTime(0.0001, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.18 + Math.random() * 0.12, now + 0.02);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+      const rumble = audioCtx.createOscillator();
+      const rumbleGain = audioCtx.createGain();
+      rumble.type = 'sawtooth';
+      rumble.frequency.setValueAtTime(35 + Math.random() * 25, now);
+      rumble.frequency.exponentialRampToValueAtTime(18 + Math.random() * 8, now + duration);
+      rumbleGain.gain.setValueAtTime(0.0001, now);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.08, now + 0.03);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(audioCtx.destination);
+
+      rumble.connect(rumbleGain);
+      rumbleGain.connect(audioCtx.destination);
+
+      noise.start(now);
+      noise.stop(now + duration + 0.05);
+      rumble.start(now);
+      rumble.stop(now + duration + 0.05);
     }
 
     function playHit() {
