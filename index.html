@@ -89,6 +89,26 @@
       text-shadow: 0 0 10px #ff6ec7, 3px 3px 0 #000;
       animation: flicker 0.25s infinite alternate;
     }
+    .ending-message {
+      color: #ff9acb;
+      font-size: clamp(18px, 4vw, 28px);
+      font-weight: bold;
+      margin: 8px 0 6px;
+      text-shadow: 2px 2px #4a1732;
+    }
+    .ending-line {
+      color: #ffd1e8;
+      font-size: clamp(16px, 3vw, 22px);
+      font-weight: bold;
+      margin: 4px 0 8px;
+      text-shadow: 2px 2px #000;
+    }
+    .kiss-scene {
+      width: min(220px, 70vw);
+      height: auto;
+      image-rendering: pixelated;
+      margin: 4px 0 6px;
+    }
     @keyframes flicker {
       0% { opacity: 0.7; transform: translateY(0); }
       50% { opacity: 1; transform: translateY(-1px); }
@@ -114,6 +134,40 @@
   <div id="gameOver" style="display:none">
     <h1>GAME OVER</h1>
     <p id="finalScore">Score: 0</p>
+    <p class="ending-message">Ashley loves farty macus</p>
+    <svg class="kiss-scene" viewBox="0 0 180 110" role="img" aria-label="8-bit girl blowing a kiss to Marcus">
+      <rect x="26" y="18" width="36" height="8" fill="#e74c3c"/>
+      <rect x="22" y="24" width="12" height="8" fill="#e74c3c"/>
+      <rect x="30" y="26" width="28" height="24" fill="#f5c6a5"/>
+      <rect x="34" y="34" width="4" height="4" fill="#111"/>
+      <rect x="48" y="34" width="4" height="4" fill="#111"/>
+      <rect x="56" y="40" width="8" height="4" fill="#f5c6a5"/>
+      <rect x="32" y="50" width="24" height="26" fill="#4a90d9"/>
+      <rect x="34" y="76" width="8" height="12" fill="#2c3e50"/>
+      <rect x="48" y="76" width="8" height="12" fill="#2c3e50"/>
+
+      <rect x="90" y="18" width="30" height="10" fill="#ff66b3"/>
+      <rect x="82" y="26" width="10" height="18" fill="#ff66b3"/>
+      <rect x="92" y="26" width="26" height="22" fill="#f6d7b9"/>
+      <rect x="96" y="22" width="22" height="8" fill="#ff66b3"/>
+      <rect x="104" y="34" width="4" height="4" fill="#111"/>
+      <rect x="112" y="34" width="4" height="4" fill="#111"/>
+      <rect x="100" y="48" width="24" height="26" fill="#f9b5d0"/>
+      <rect x="96" y="54" width="8" height="14" fill="#f6d7b9"/>
+      <rect x="108" y="54" width="8" height="14" fill="#f6d7b9"/>
+      <rect x="118" y="20" width="7" height="7" fill="#ff66b3"/>
+      <rect x="126" y="28" width="7" height="7" fill="#ff66b3"/>
+      <rect x="120" y="34" width="7" height="7" fill="#ff66b3"/>
+      <rect x="128" y="40" width="7" height="7" fill="#ff66b3"/>
+      <rect x="124" y="48" width="7" height="7" fill="#ff66b3"/>
+      <rect x="135" y="30" width="7" height="7" fill="#ff66b3"/>
+      <rect x="141" y="36" width="7" height="7" fill="#ff66b3"/>
+
+      <rect x="66" y="50" width="7" height="7" fill="#ff66b3"/>
+      <rect x="70" y="56" width="7" height="7" fill="#ff66b3"/>
+      <rect x="62" y="58" width="7" height="7" fill="#ff66b3"/>
+    </svg>
+    <p class="ending-line">you saved me</p>
     <button class="btn" id="restartBtn">PLAY AGAIN</button>
   </div>
 
@@ -348,10 +402,8 @@
       if (spawnTimer >= spawnRate) {
         spawnTimer = 0;
         spawnEnemy();
-        // Add occasional extra creatures as the score rises.
         const extraChance = Math.min(0.1 + score / 250, 0.65);
         if (Math.random() < extraChance) spawnEnemy();
-        // Faster waves begin immediately and ramp up quickly, but keep a floor.
         if (spawnRate > 24) spawnRate = Math.max(24, spawnRate - 0.6);
       }
 
